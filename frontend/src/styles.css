@@ -1,0 +1,241 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap");
+
+:root {
+  --bg-a: #08121b;
+  --bg-b: #141b2f;
+  --bg-c: #4b4731;
+  --panel: rgba(9, 15, 22, 0.72);
+  --border: rgba(255, 255, 255, 0.18);
+  --text: #edf6ff;
+  --muted: #b2bfd2;
+  --accent: #f6c555;
+  --ok: #87f3a8;
+  --error: #ff8b7f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: "Space Grotesk", sans-serif;
+  color: var(--text);
+  background: radial-gradient(1200px at 10% 10%, #1e3a4d 0%, transparent 60%),
+    radial-gradient(1000px at 85% 15%, #594f2e 0%, transparent 55%),
+    linear-gradient(135deg, var(--bg-a), var(--bg-b) 55%, var(--bg-c));
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  width: 100%;
+  height: 100%;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.panel {
+  backdrop-filter: blur(12px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.panel h1 {
+  margin: 0;
+  font-size: 1.55rem;
+  letter-spacing: 0.03em;
+}
+
+.panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.4;
+}
+
+.file-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.file-picker input {
+  color: var(--text);
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.control div {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.control strong {
+  color: var(--accent);
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
+}
+
+button {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  padding: 0.6rem 0.9rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.status {
+  margin-top: auto;
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.status-ready {
+  color: var(--ok);
+}
+
+.status-error {
+  color: var(--error);
+}
+
+.mesh-list-wrap {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 0.55rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mesh-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.mesh-list-head h2 {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mesh-list {
+  max-height: 180px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.mesh-item {
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  padding: 0.42rem 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.mesh-item.is-selected {
+  border-color: rgba(81, 151, 255, 0.85);
+  background: rgba(44, 110, 214, 0.3);
+}
+
+.mesh-empty {
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 0.2rem 0.1rem;
+}
+
+.viewport-wrap {
+  position: relative;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+  min-height: 360px;
+}
+
+.perf-viewer {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, auto));
+  gap: 0.35rem 0.8rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  background: rgba(6, 10, 16, 0.78);
+  backdrop-filter: blur(8px);
+  font-size: 0.78rem;
+  color: #d7e4f5;
+  pointer-events: none;
+}
+
+.perf-viewer div {
+  white-space: nowrap;
+}
+
+.viewport {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 920px) {
+  .page {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .viewport-wrap {
+    min-height: 50vh;
+  }
+
+  .perf-viewer {
+    grid-template-columns: 1fr;
+    font-size: 0.76rem;
+  }
+}

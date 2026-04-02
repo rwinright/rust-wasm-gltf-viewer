@@ -1,0 +1,11 @@
+{
+  "name": "gltf-editor-rs",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "install:frontend": "npm --prefix frontend install",
+    "wasm:build": "npm --prefix frontend run wasm:build",
+    "dev": "npm --prefix frontend run wasm:build && npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run wasm:build && npm --prefix frontend run build"
+  }
+}
