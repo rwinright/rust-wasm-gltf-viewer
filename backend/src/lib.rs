@@ -152,7 +152,7 @@ impl Viewer {
             target_center: [0.0, 0.0, 0.0],
             pre_select_distance: 4.0,
             pre_select_center: [0.0, 0.0, 0.0],
-            bg: [0.15, 0.16, 0.19, 1.0],
+            bg: [1.0, 1.0, 1.0, 1.0],
             orbiting: false,
             panning: false,
             last_pointer: [0.0, 0.0],
@@ -569,7 +569,10 @@ impl Viewer {
         };
 
         let aspect = (self.canvas.width().max(1) as f32) / (self.canvas.height().max(1) as f32);
-        let proj = mat4_perspective(45.0_f32.to_radians(), aspect, 0.01, 2000.0);
+        // Keep depth precision healthy at different zoom levels to reduce z-fighting artifacts.
+        let near = (self.distance * 0.02).clamp(0.05, 1.0);
+        let far = (self.distance * 40.0).max(near + 10.0);
+        let proj = mat4_perspective(45.0_f32.to_radians(), aspect, near, far);
 
         let eye = self.camera_eye();
         let view = mat4_look_at(eye, self.center, [0.0, 1.0, 0.0]);
@@ -1331,7 +1334,7 @@ void main() {
 
   vec3 N = normalize(v_normal);
   vec3 V = normalize(u_camera_pos - v_world_pos);
-    vec3 L = normalize(vec3(0.45, 1.0, 0.35));
+    vec3 L = normalize(vec3(0.35, 1.0, 0.45));
   vec3 H = normalize(V + L);
 
   vec3 F0 = mix(vec3(0.04), albedo, metallic);
@@ -1347,18 +1350,18 @@ void main() {
   vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
   float NdotL = max(dot(N, L), 0.0);
-    vec3 radiance = vec3(6.2);
+    vec3 radiance = vec3(10.0);
   vec3 Lo = (kD * albedo / PI + specular) * radiance * NdotL;
 
     // Approximate GI: sky/ground hemispherical ambient + soft bounce fill.
     float hemi = N.y * 0.5 + 0.5;
-    vec3 sky = vec3(0.34, 0.42, 0.56);
-    vec3 ground = vec3(0.18, 0.17, 0.15);
+    vec3 sky = vec3(0.96, 0.97, 1.00);
+    vec3 ground = vec3(0.82, 0.83, 0.84);
     vec3 hemiLight = mix(ground, sky, hemi);
-    vec3 ambient = hemiLight * albedo * 0.42;
+    vec3 ambient = hemiLight * albedo * 0.65;
 
     float bounce = pow(max(dot(N, normalize(V + vec3(0.0, 1.0, 0.0))), 0.0), 1.5);
-    vec3 indirect = albedo * (0.16 + 0.24 * bounce) * (1.0 - metallic * 0.7);
+    vec3 indirect = albedo * (0.22 + 0.28 * bounce) * (1.0 - metallic * 0.7);
 
     vec3 color = ambient + indirect + Lo;
   color = color / (color + vec3(1.0));
