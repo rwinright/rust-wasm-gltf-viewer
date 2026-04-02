@@ -14,6 +14,10 @@ pub struct Viewer {
     gl: GL,
     program: WebGlProgram,
     uniforms: Uniforms,
+    box_program: WebGlProgram,
+    box_uniforms: BoxUniforms,
+    box_vao: WebGlVertexArrayObject,
+    box_vbo: WebGlBuffer,
     scene: Option<SceneGpu>,
     yaw: f32,
     pitch: f32,
@@ -39,6 +43,12 @@ struct Uniforms {
     u_has_base_color_tex: WebGlUniformLocation,
     u_base_color_tex: WebGlUniformLocation,
     u_highlight: WebGlUniformLocation,
+}
+
+struct BoxUniforms {
+    u_view: WebGlUniformLocation,
+    u_proj: WebGlUniformLocation,
+    u_color: WebGlUniformLocation,
 }
 
 struct SceneGpu {
@@ -135,6 +145,25 @@ impl Viewer {
             u_highlight: get_uniform(&gl, &program, "u_highlight")?,
         };
 
+        let box_program = create_program(&gl, BOX_VERT_SHADER_SOURCE, BOX_FRAG_SHADER_SOURCE)?;
+        let box_uniforms = BoxUniforms {
+            u_view: get_uniform(&gl, &box_program, "u_view")?,
+            u_proj: get_uniform(&gl, &box_program, "u_proj")?,
+            u_color: get_uniform(&gl, &box_program, "u_color")?,
+        };
+        let box_vao = gl
+            .create_vertex_array()
+            .ok_or_else(|| JsValue::from_str("Failed to create selection box VAO"))?;
+        let box_vbo = gl
+            .create_buffer()
+            .ok_or_else(|| JsValue::from_str("Failed to create selection box VBO"))?;
+        gl.bind_vertex_array(Some(&box_vao));
+        gl.bind_buffer(GL::ARRAY_BUFFER, Some(&box_vbo));
+        gl.buffer_data_with_i32(GL::ARRAY_BUFFER, (24 * 3 * std::mem::size_of::<f32>()) as i32, GL::DYNAMIC_DRAW);
+        gl.enable_vertex_attrib_array(0);
+        gl.vertex_attrib_pointer_with_i32(0, 3, GL::FLOAT, false, (3 * std::mem::size_of::<f32>()) as i32, 0);
+        gl.bind_vertex_array(None);
+
         gl.enable(GL::DEPTH_TEST);
         gl.enable(GL::CULL_FACE);
 
@@ -143,6 +172,10 @@ impl Viewer {
             gl,
             program,
             uniforms,
+            box_program,
+            box_uniforms,
+            box_vao,
+            box_vbo,
             scene: None,
             yaw: 0.8,
             pitch: 0.3,
@@ -606,11 +639,7 @@ impl Viewer {
         self.gl.uniform1i(Some(&self.uniforms.u_base_color_tex), 0);
 
         for primitive in &scene.primitives {
-            let is_highlighted = scene
-                .selected_mesh
-                .is_some_and(|idx| idx == primitive.mesh_index);
-            self.gl
-                .uniform1i(Some(&self.uniforms.u_highlight), if is_highlighted { 1 } else { 0 });
+            self.gl.uniform1i(Some(&self.uniforms.u_highlight), 0);
 
             self.gl.uniform4f(
                 Some(&self.uniforms.u_base_color_factor),
@@ -649,6 +678,30 @@ impl Viewer {
                 GL::UNSIGNED_INT,
                 0,
             );
+        }
+
+        if let Some(selected_idx) = scene.selected_mesh {
+            if let Some(mesh) = scene.meshes.get(selected_idx) {
+                // Draw an opaque box around the selected mesh bounds.
+                let box_vertices = aabb_line_vertices(mesh.aabb_min, mesh.aabb_max);
+                let box_array = js_sys::Float32Array::from(box_vertices.as_slice());
+
+                self.gl.use_program(Some(&self.box_program));
+                self.gl
+                    .uniform_matrix4fv_with_f32_array(Some(&self.box_uniforms.u_view), false, &view);
+                self.gl
+                    .uniform_matrix4fv_with_f32_array(Some(&self.box_uniforms.u_proj), false, &proj);
+                self.gl
+                    .uniform4f(Some(&self.box_uniforms.u_color), 0.10, 0.36, 1.0, 1.0);
+                self.gl.bind_vertex_array(Some(&self.box_vao));
+                self.gl.bind_buffer(GL::ARRAY_BUFFER, Some(&self.box_vbo));
+                self.gl
+                    .buffer_sub_data_with_i32_and_array_buffer_view(GL::ARRAY_BUFFER, 0, &box_array);
+
+                self.gl.disable(GL::DEPTH_TEST);
+                self.gl.draw_arrays(GL::LINES, 0, 24);
+                self.gl.enable(GL::DEPTH_TEST);
+            }
         }
 
         self.gl.bind_vertex_array(None);
@@ -1257,6 +1310,37 @@ fn ray_aabb_hit(origin: [f32; 3], dir: [f32; 3], min: [f32; 3], max: [f32; 3]) -
     }
 }
 
+fn aabb_line_vertices(min: [f32; 3], max: [f32; 3]) -> [f32; 72] {
+    let [minx, miny, minz] = min;
+    let [maxx, maxy, maxz] = max;
+
+    let c0 = [minx, miny, minz];
+    let c1 = [maxx, miny, minz];
+    let c2 = [maxx, maxy, minz];
+    let c3 = [minx, maxy, minz];
+    let c4 = [minx, miny, maxz];
+    let c5 = [maxx, miny, maxz];
+    let c6 = [maxx, maxy, maxz];
+    let c7 = [minx, maxy, maxz];
+
+    [
+        c0[0], c0[1], c0[2], c1[0], c1[1], c1[2],
+        c1[0], c1[1], c1[2], c2[0], c2[1], c2[2],
+        c2[0], c2[1], c2[2], c3[0], c3[1], c3[2],
+        c3[0], c3[1], c3[2], c0[0], c0[1], c0[2],
+
+        c4[0], c4[1], c4[2], c5[0], c5[1], c5[2],
+        c5[0], c5[1], c5[2], c6[0], c6[1], c6[2],
+        c6[0], c6[1], c6[2], c7[0], c7[1], c7[2],
+        c7[0], c7[1], c7[2], c4[0], c4[1], c4[2],
+
+        c0[0], c0[1], c0[2], c4[0], c4[1], c4[2],
+        c1[0], c1[1], c1[2], c5[0], c5[1], c5[2],
+        c2[0], c2[1], c2[2], c6[0], c6[1], c6[2],
+        c3[0], c3[1], c3[2], c7[0], c7[1], c7[2],
+    ]
+}
+
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
@@ -1387,5 +1471,28 @@ void main() {
   color = pow(color, vec3(1.0 / 2.2));
 
   out_color = vec4(color, baseColor.a);
+}
+"#;
+
+const BOX_VERT_SHADER_SOURCE: &str = r#"#version 300 es
+precision highp float;
+layout(location = 0) in vec3 a_position;
+
+uniform mat4 u_view;
+uniform mat4 u_proj;
+
+void main() {
+    gl_Position = u_proj * u_view * vec4(a_position, 1.0);
+}
+"#;
+
+const BOX_FRAG_SHADER_SOURCE: &str = r#"#version 300 es
+precision highp float;
+out vec4 out_color;
+
+uniform vec4 u_color;
+
+void main() {
+    out_color = u_color;
 }
 "#;
