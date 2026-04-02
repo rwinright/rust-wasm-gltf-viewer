@@ -18,6 +18,8 @@ pub struct Viewer {
     box_uniforms: BoxUniforms,
     box_vao: WebGlVertexArrayObject,
     box_vbo: WebGlBuffer,
+    grid_vao: WebGlVertexArrayObject,
+    grid_vbo: WebGlBuffer,
     scene: Option<SceneGpu>,
     yaw: f32,
     pitch: f32,
@@ -59,6 +61,7 @@ struct SceneGpu {
     selected_mesh: Option<usize>,
     scene_center: [f32; 3],
     scene_radius: f32,
+    scene_min_y: f32,
     stats: SceneStats,
 }
 
@@ -164,6 +167,31 @@ impl Viewer {
         gl.vertex_attrib_pointer_with_i32(0, 3, GL::FLOAT, false, (3 * std::mem::size_of::<f32>()) as i32, 0);
         gl.bind_vertex_array(None);
 
+        let grid_vao = gl
+            .create_vertex_array()
+            .ok_or_else(|| JsValue::from_str("Failed to create grid VAO"))?;
+        let grid_vbo = gl
+            .create_buffer()
+            .ok_or_else(|| JsValue::from_str("Failed to create grid VBO"))?;
+        gl.bind_vertex_array(Some(&grid_vao));
+        gl.bind_buffer(GL::ARRAY_BUFFER, Some(&grid_vbo));
+        // Enough room for a moderately dense line grid without reallocating every frame.
+        gl.buffer_data_with_i32(
+            GL::ARRAY_BUFFER,
+            (2048 * std::mem::size_of::<f32>()) as i32,
+            GL::DYNAMIC_DRAW,
+        );
+        gl.enable_vertex_attrib_array(0);
+        gl.vertex_attrib_pointer_with_i32(
+            0,
+            3,
+            GL::FLOAT,
+            false,
+            (3 * std::mem::size_of::<f32>()) as i32,
+            0,
+        );
+        gl.bind_vertex_array(None);
+
         gl.enable(GL::DEPTH_TEST);
         gl.enable(GL::CULL_FACE);
 
@@ -176,6 +204,8 @@ impl Viewer {
             box_uniforms,
             box_vao,
             box_vbo,
+            grid_vao,
+            grid_vbo,
             scene: None,
             yaw: 0.8,
             pitch: 0.3,
@@ -477,7 +507,7 @@ impl Viewer {
             return Err(JsValue::from_str("No triangle mesh geometry found"));
         }
 
-        let (center, radius) = compute_bounds(&world_positions);
+        let (scene_min, _, center, radius) = compute_bounds_ext(&world_positions);
         self.center = center;
         self.distance = (radius * 2.5).max(1.0);
         self.target_center = self.center;
@@ -603,6 +633,7 @@ impl Viewer {
             selected_mesh: None,
             scene_center: center,
             scene_radius: radius,
+            scene_min_y: scene_min[1],
         });
 
         Ok(())
@@ -628,6 +659,40 @@ impl Viewer {
 
         let eye = self.camera_eye();
         let view = mat4_look_at(eye, self.center, [0.0, 1.0, 0.0]);
+
+        self.gl.use_program(Some(&self.program));
+        self.gl
+            .uniform_matrix4fv_with_f32_array(Some(&self.uniforms.u_view), false, &view);
+        self.gl
+            .uniform_matrix4fv_with_f32_array(Some(&self.uniforms.u_proj), false, &proj);
+        self.gl
+            .uniform3f(Some(&self.uniforms.u_camera_pos), eye[0], eye[1], eye[2]);
+        self.gl.uniform1i(Some(&self.uniforms.u_base_color_tex), 0);
+
+        let grid_vertices = grid_line_vertices(scene.scene_center, scene.scene_radius, scene.scene_min_y);
+        if !grid_vertices.is_empty() {
+            let grid_array = js_sys::Float32Array::from(grid_vertices.as_slice());
+
+            self.gl.use_program(Some(&self.box_program));
+            self.gl.uniform_matrix4fv_with_f32_array(
+                Some(&self.box_uniforms.u_view),
+                false,
+                &view,
+            );
+            self.gl.uniform_matrix4fv_with_f32_array(
+                Some(&self.box_uniforms.u_proj),
+                false,
+                &proj,
+            );
+            self.gl
+                .uniform4f(Some(&self.box_uniforms.u_color), 0.74, 0.76, 0.80, 1.0);
+            self.gl.bind_vertex_array(Some(&self.grid_vao));
+            self.gl.bind_buffer(GL::ARRAY_BUFFER, Some(&self.grid_vbo));
+            self.gl
+                .buffer_sub_data_with_i32_and_array_buffer_view(GL::ARRAY_BUFFER, 0, &grid_array);
+            self.gl
+                .draw_arrays(GL::LINES, 0, (grid_vertices.len() / 3) as i32);
+        }
 
         self.gl.use_program(Some(&self.program));
         self.gl
@@ -1339,6 +1404,25 @@ fn aabb_line_vertices(min: [f32; 3], max: [f32; 3]) -> [f32; 72] {
         c2[0], c2[1], c2[2], c6[0], c6[1], c6[2],
         c3[0], c3[1], c3[2], c7[0], c7[1], c7[2],
     ]
+}
+
+fn grid_line_vertices(scene_center: [f32; 3], scene_radius: f32, scene_min_y: f32) -> Vec<f32> {
+    let steps = 16_i32;
+    let extent = (scene_radius * 1.35).max(1.0);
+    let y = scene_min_y - (scene_radius * 0.005 + 0.002);
+
+    let mut out = Vec::with_capacity(((steps * 2 + 1) as usize) * 12);
+    for i in -steps..=steps {
+        let t = i as f32 / steps as f32;
+        let p = t * extent;
+
+        // Lines parallel to X axis.
+        out.extend_from_slice(&[-extent, y, p, extent, y, p]);
+        // Lines parallel to Z axis.
+        out.extend_from_slice(&[p, y, -extent, p, y, extent]);
+    }
+
+    out
 }
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
