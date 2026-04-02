@@ -1,4 +1,4 @@
-import { ChangeEvent, MouseEvent, WheelEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import init, { Viewer } from "./wasm/pkg/gltf_editor_rs_backend";
 
 type ViewerStatus = "initializing" | "ready" | "error";
@@ -15,6 +15,12 @@ type PerfStats = {
   textureMB: number;
   renderLoadPct: number;
 };
+
+function formatMeshDisplayName(name: string): string {
+  const [base] = name.split("-");
+  const trimmed = base.trim();
+  return trimmed.length > 0 ? trimmed : name;
+}
 
 export default function App() {
   const viewerRef = useRef<Viewer | null>(null);
@@ -54,6 +60,26 @@ export default function App() {
   });
   const [meshNames, setMeshNames] = useState<string[]>([]);
   const [selectedMesh, setSelectedMesh] = useState<number>(-1);
+
+  const displayMeshNames = useMemo(() => {
+    const baseNames = meshNames.map(formatMeshDisplayName);
+    const totals = new Map<string, number>();
+    for (const base of baseNames) {
+      totals.set(base, (totals.get(base) ?? 0) + 1);
+    }
+
+    const seen = new Map<string, number>();
+    return baseNames.map((base) => {
+      const total = totals.get(base) ?? 0;
+      if (total <= 1) {
+        return base;
+      }
+
+      const index = (seen.get(base) ?? 0) + 1;
+      seen.set(base, index);
+      return `${base}-${index}`;
+    });
+  }, [meshNames]);
 
   const syncCameraFromViewer = () => {
     const viewer = viewerRef.current;
@@ -192,13 +218,10 @@ export default function App() {
   const resetCamera = () => {
     const viewer = viewerRef.current;
     if (viewer) {
-      viewer.clear_selection();
-      viewer.set_camera(0.8, 0.3, 4.0);
+      viewer.reset_camera_to_scene();
       setSelectedMesh(-1);
+      syncCameraFromViewer();
     }
-    setYaw(0.8);
-    setPitch(0.3);
-    setDistance(4.0);
   };
 
   const handleMouseDown = (event: MouseEvent<HTMLCanvasElement>) => {
@@ -255,8 +278,13 @@ export default function App() {
 
     const picked = viewer.pick_mesh(event.nativeEvent.offsetX, event.nativeEvent.offsetY);
     if (picked >= 0) {
-      viewer.select_mesh(picked);
-      setSelectedMesh(picked);
+      if (picked === selectedMesh) {
+        viewer.clear_selection();
+        setSelectedMesh(-1);
+      } else {
+        viewer.select_mesh(picked);
+        setSelectedMesh(picked);
+      }
       syncCameraFromViewer();
     } else {
       viewer.clear_selection();
@@ -376,7 +404,7 @@ export default function App() {
                     meshItemRefs.current[index] = el;
                   }}
                 >
-                  {name}
+                  {displayMeshNames[index]}
                 </button>
               ))
             )}

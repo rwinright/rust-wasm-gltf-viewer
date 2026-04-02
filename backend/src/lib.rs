@@ -310,7 +310,7 @@ impl Viewer {
 
         scene.selected_mesh = Some(idx);
         self.target_center = mesh.center;
-        self.target_distance = (mesh.radius * 2.5).max(0.6);
+        self.target_distance = (mesh.radius * 3.2).max(0.8);
         true
     }
 
@@ -320,6 +320,25 @@ impl Viewer {
             self.target_center = self.pre_select_center;
             self.target_distance = self.pre_select_distance;
         }
+    }
+
+    pub fn reset_camera_to_scene(&mut self) {
+        self.yaw = 0.8;
+        self.pitch = 0.3;
+
+        if let Some(scene) = &mut self.scene {
+            scene.selected_mesh = None;
+            self.center = scene.scene_center;
+            self.distance = (scene.scene_radius * 2.5).max(1.0);
+        } else {
+            self.center = [0.0, 0.0, 0.0];
+            self.distance = 4.0;
+        }
+
+        self.target_center = self.center;
+        self.target_distance = self.distance;
+        self.pre_select_center = self.center;
+        self.pre_select_distance = self.distance;
     }
 
     pub fn pick_mesh(&self, x: f32, y: f32) -> i32 {

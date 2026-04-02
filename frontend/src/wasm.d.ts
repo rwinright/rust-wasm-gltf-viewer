@@ -19,6 +19,7 @@ declare module "./wasm/pkg/gltf_editor_rs_backend" {
     get_selected_mesh(): number;
     select_mesh(meshIndex: number): boolean;
     clear_selection(): void;
+    reset_camera_to_scene(): void;
     pick_mesh(x: number, y: number): number;
     load_gltf_from_bytes(bytes: Uint8Array): void;
     render_frame(): void;
